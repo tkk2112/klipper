@@ -236,9 +236,10 @@ LogHandlers["stepq"] = HandleStepQ
 class HandleStepPhase:
     SubscriptionIdParts = 0
     ParametersMin = 1
-    ParametersMax = 1
+    ParametersMax = 2
     DataSets = [
         ('step_phase(<driver>)', 'Stepper motor phase of the given stepper'),
+        ('step_phase(<driver>,microsteps)', 'Microstep position for stepper'),
     ]
     def __init__(self, lmanager, name, name_parts):
         self.name = name
@@ -248,8 +249,13 @@ class HandleStepPhase:
         if self.driver_name not in config or self.stepper_name not in config:
             raise error("Unable to find stepper driver '%s' config"
                         % (self.driver_name,))
+        if len(name_parts) == 3 and name_parts[2] != "microstep":
+            raise error("Unknown step_phase selection '%s'" % (name_parts[2],))
+        self.report_microsteps = len(name_parts) == 3
         sconfig = config[self.stepper_name]
-        self.phases = sconfig["microsteps"] * 4
+        self.phases = sconfig["microsteps"]
+        if not self.report_microsteps:
+            self.phases *= 4
         self.jdispatch = lmanager.get_jdispatch()
         self.jdispatch.add_handler(name, "stepq:" + self.stepper_name)
         # stepq tracking
@@ -260,6 +266,9 @@ class HandleStepPhase:
         self.next_status_time = 0.
         self.mcu_phase_offset = 0
     def get_label(self):
+        if self.report_microsteps:
+            return {'label': '%s microstep' % (self.stepper_name,),
+                    'units': 'Microstep'}
         return {'label': '%s phase' % (self.stepper_name,), 'units': 'Phase'}
     def _pull_phase_offset(self, req_time):
         db, self.next_status_time = self.status_tracker.pull_status(req_time)
